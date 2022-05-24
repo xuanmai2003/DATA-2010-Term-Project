@@ -1,0 +1,1090 @@
+---
+title: "DATA 2010 Term project"
+author: "Mai Nguyen & Tuan Ngo"
+date: "5/22/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Topic 
+Our team chose the *Top100 Billboard dataset* with Billboard data and Audio data.
+
+```{r, message=FALSE}
+billboard = readr::read_csv(
+  'https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-09-14/billboard.csv')
+audio = readr::read_csv(
+  'https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-09-14/audio_features.csv')
+```
+
+# Introduction: Dataset Exploratory Analysis
+For the Billboard data, there are 10 variables: 
+- url
+
+- week_id
+
+- week_position 
+
+- song
+
+- performer
+
+- song_id
+
+- instance (number of time the song appears on the chart: max = 10)
+
+- previous_week_position
+
+- peak_position
+
+- weeks_on_chart (max = 87)
+
+For the Audio data, there are 22 variables: 
+- song_id
+
+- performer
+
+- song
+
+- spotify_genre
+
+- spotify_track_id
+
+- spotify_track_preview_url
+
+- spotify_track_duration_ms (min = 29688 ms = 0.49 minutes and max = 3079157 ms = 51.32 minutes)
+
+- spotify_track_explicit
+
+- spotify_track_album
+
+- danceability (range: 0.0 to 1.0)
+
+- energy
+
+- key 
+
+- loudness 
+
+- mode 
+
+- speechiness
+
+- acousticness 
+
+- instrumentalness
+
+- liveness
+
+- valence
+
+- tempo
+
+- time_signature
+
+- spotify_track_popularity
+
+There are some variables that appear in both datasets so we decided to combine them together to create 1 dataset using 'left_join' from the 'tidyverse' package.
+```{r, message=FALSE, echo=FALSE, warning = FALSE}
+library(tidyverse)
+chart_audio = left_join(billboard, audio, by = c("song_id", "performer", "song"))
+```
+
+We ranked the songs by the number of weeks on chart of every songs and we found that most of the top 10 are from after 2010.
+```{r, echo=FALSE, warning = FALSE}
+rank_num_week = chart_audio[order(chart_audio$weeks_on_chart, decreasing = TRUE),] %>% 
+  distinct(song, .keep_all = TRUE) %>% 
+  select(song, week_id) %>% 
+  head(10)
+library(knitr)
+kable(rank_num_week)
+```
+
+Therefore, if we want find out the latest trend, we will focus on analyzing the chart from 2010 up until now only. We used 'lubridate' package to change the format of the date of week_id and filtered out the songs with Week_id starting from 01-01-2010 up until today. This new dataset is called song_after_2010.
+
+```{r, echo=FALSE, message=FALSE, warning = FALSE}
+library(lubridate)
+chart_audio$week_id = mdy(chart_audio$week_id)
+songs_after_2010 = chart_audio %>% 
+  filter(week_id %in% c(ymd("2010-01-01"):today()))
+
+descending_woc = arrange(songs_after_2010, desc(songs_after_2010$weeks_on_chart))
+
+top1_after_2010 = descending_woc %>% filter(peak_position == 1)
+
+unique_all = descending_woc%>% distinct(song, .keep_all = TRUE)
+
+unique_top1 = top1_after_2010 %>% distinct(song, .keep_all = TRUE)
+```
+
+We also use visualization (use ggplot and ggplot2) to see the characteristics of song that had topped the chart (having peak position equals 1). 
+
+```{r,echo = FALSE}
+library(ggplot2)
+```
+We observed the following features of top 1 songs on the chart:
+
+- Most songs have tempo around 80 to 136 and the range of tempo is from 66 to 186
+
+```{r, echo=FALSE, comment = NA}
+count_tempo = unique_top1 %>% 
+  filter(!is.na(tempo))
+
+summary(count_tempo$tempo)
+```
+
+```{r, echo=FALSE}
+count_tempo %>% 
+  ggplot(aes(x = tempo)) + 
+  geom_density()+
+  xlim(50,250)
+```
+
+- Songs with genre of pop and hip hop
+```{r, echo=FALSE, messange = FALSE, comment = NA}
+count_genre = unique_top1 %>% filter(!is.na(spotify_genre)) %>%
+  count(spotify_genre) %>% 
+  arrange(desc(n))
+
+kable(count_genre %>% top_n(5))
+```
+
+\pagebreak
+- Songs with energy from 0.52 to 0.83 (not too low or too high)
+
+```{r, echo=FALSE, comment = NA}
+count_energy = unique_top1 %>% 
+  filter(!is.na(energy))
+
+summary(count_energy$energy)
+```
+```{r, echo=FALSE}
+count_energy %>% 
+  ggplot(aes(x = energy)) + 
+  geom_density()
+```
+
+\pagebreak
+- Songs with duration from 200000ms (3 min) to 250000ms (4 min)
+```{r, echo=FALSE, comment = NA}
+count_duration = unique_top1 %>%
+  filter(!is.na(spotify_track_duration_ms)) 
+
+summary(count_duration$spotify_track_duration_ms)
+```
+```{r, echo=FALSE}
+count_duration %>% 
+  ggplot(aes(x = spotify_track_duration_ms)) + 
+  geom_density()
+```
+
+\pagebreak
+- Songs with average danceability (from 0.6 to 0.8)
+```{r, echo=FALSE, comment = NA}
+count_danceability = unique_top1 %>% 
+  filter(!is.na(danceability)) 
+
+summary(count_danceability$danceability)
+```
+```{r, echo=FALSE}
+count_danceability %>% 
+  ggplot(aes(x = danceability)) + 
+  geom_density()
+```
+
+\pagebreak
+- Most popular key is C (key = 0) and least popular is D-sharp or E-minor (key = 3)
+```{r, echo=FALSE}
+count_key = unique_top1 %>% 
+  filter(!is.na(key)) %>% 
+  count(key)%>% 
+  rename(count = n) %>% 
+  arrange(desc(count))
+
+kable(count_key)
+```
+```{r, echo = FALSE}
+count_key$key = as.character(count_key$key)
+
+mycols = c("#42daf5", "#f54242", "#6342f5", "#f5b942", "#f242f5", "#daf542", "#691f91", "#1f914d", "#b99cba", "#55fa34", "#9c605c", "#42f59c")
+count_key %>% 
+  ggplot(aes(x = 2, y = count, fill = key)) +
+  geom_bar(stat="identity", color = "white") +
+  geom_label(aes(label = count),
+             color = "white",
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y", start = 0)+
+  scale_fill_manual(values = mycols) +
+  theme_void() +
+  xlim(0.5, 2.5)
+```
+
+\pagebreak
+- Songs with overall loudness from around -7.5 to around -4
+```{r, echo=FALSE, comment = NA}
+count_loudness = unique_top1 %>% 
+  filter(!is.na(loudness)) 
+
+summary(count_loudness$loudness)
+```
+```{r, echo=FALSE}
+count_loudness %>% 
+  ggplot(aes(x = loudness)) + 
+  geom_density()
+```
+
+\pagebreak
+- Most songs are in major modality (mode = 1) which suggest a popularity in songs that sound more cheerful
+
+```{r, echo = FALSE}
+count_mode = unique_top1 %>% 
+  filter(!is.na(mode)) %>% 
+  count(mode) %>% 
+  rename(freq = n) 
+count_mode$mode = as.character(count_mode$mode)
+
+count_mode %>% 
+  ggplot(aes(x = "", y = freq, fill = mode)) +
+  geom_bar(stat="identity", width=1) +
+  geom_label(aes(label = freq),
+             color = "white",
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  theme_void()
+```
+
+\pagebreak
+- Preference in songs with speechiness below 0.1 which suggest songs with less spoken words and more music are more likely to top the chart
+```{r, echo=FALSE, comment = NA}
+count_speechiness = unique_top1 %>% 
+  filter(!is.na(speechiness)) %>%  
+  count(speechiness)
+summary(count_speechiness$speechiness)
+```
+```{r, echo=FALSE}
+count_speechiness %>% 
+  ggplot(aes(x = speechiness)) + 
+  geom_density()
+```
+
+\pagebreak
+- Preference in songs with acousticness below 0.25 which suggest songs that are not acoustic are more likely to top the chart.
+
+```{r, echo=FALSE}
+count_acousticness = unique_top1 %>% 
+  filter(!is.na(acousticness)) 
+
+count_acousticness %>% 
+  ggplot(aes(x = acousticness)) + 
+  geom_density()
+```
+
+\pagebreak
+- Preference in songs with instrumentalness of 0 which suggests preference in songs with vocal contents but there are some exceptions (eg: there is 1 song with instrumentalness of 0.13 which suggest a likelihood of containing no vocal content)
+
+```{r, echo=FALSE}
+count_instrumentalness = unique_top1 %>%
+  filter(!is.na(instrumentalness)) %>% 
+  count(instrumentalness) %>% 
+  arrange(desc(n))
+
+count_instrumentalness %>% 
+  ggplot(aes(x = instrumentalness)) + 
+  geom_density()
+```
+
+\pagebreak
+- Preference in songs with liveness around 0.1 and moreover, none of the songs has liveness above 0.8. Therefore, it suggests a preference in tracks that are not live (studio recorded tracks).
+
+```{r, echo=FALSE}
+count_liveness = unique_top1 %>% 
+  filter(!is.na(liveness)) 
+
+count_liveness %>% 
+  ggplot(aes(x = liveness)) + 
+  geom_density()
+```
+
+\pagebreak
+- Most popular valance is from around 0.3 to 0.75
+
+```{r, echo=FALSE}
+count_val = unique_top1 %>% 
+  filter(!is.na(valence)) 
+
+count_val %>% 
+  ggplot(aes(x = valence)) + 
+  geom_density()
+```
+
+Another feature we want to look at is the number of weeks on chart of the songs. First, we re-order the songs by weeks_on_chart then use unique() so that each song only appears once with its highest number of weeks on chart (we can do this since all other variables that we need for our analysis will remain the same).
+
+We created 2 new datasets from songs_after_2010: uniquie-all (contains all unique songs after 2010) and unique_top1 (contains songs that have reached number 1 on the chart which means having peak_position = 1).
+
+We then pick the top 10 songs in each dataset that have the highest number of weeks on chart. 
+
+For songs that have reached number 1 (peak_position = 1), the top 10 songs are:
+
+```{r, echo=FALSE}
+top10_woc = unique_top1[order(unique_top1$weeks_on_chart, decreasing = TRUE),] %>% 
+  select(song, performer) %>% 
+  head(10)
+kable(top10_woc)
+```
+
+However, we see that a lot of songs that have never reached number 1 (peak_position != 1) can stay on the chart for a long time, even longer than songs that reached number 1. So we found that only 3 songs from the list above made into the top 10:
+
+```{r, echo=FALSE}
+highest_num_week = unique_all[order(unique_all$weeks_on_chart, decreasing = TRUE),] %>% 
+  select(song, performer) %>% 
+  head(10)
+kable(highest_num_week)
+```
+
+We wanted to look into the songs that have never reached number 1 so we filtered them out and here are some features different from our observation of the dataset above:
+
++ The genres are mostly rock and pop
+
++ The length of the song is around 215000 ms to 289133 ms which is 3.6 min to 4.8 min
+
++ The keys are mostly 1 (C sharp and D flat) 
+
++ The modes are all 1 (major) except Counting Star with 0 (minor)
+
++ The speechiness are low, under 0.1 -> this represents preference in music and other non-speech-like 
+tracks
+
++ The acousticness is low overall with the exception of Ho Hey -> preference in non-acoustic songs (this supports the observation in popular genre: pop and rock)
+
++ The liveness is low, under 0.1 except from Radioactive, Counting Star, Demon (by pop rock bands Imagine Dragons and OneRepublic) -> mostly pre-recorded tracks without audience voice
+
++ The valence are all under 0.5 -> preference in negative sound songs (e.g. sad, depressed, angry) -> contradicts the popular valence of songs with long time on charts that reaches top 1
+
+
+# Tentative Analysis Question
+
+From the top 100 Billboard dataset, our team want to determine:
+
+ - the effects of different variables have on a top billboard song.
+ - which variables have the most effect on bringing a song to the top (having peak position equals 1) or keeping a song in the top from time to time(having high number of weeks on chart).
+ 
+Based on our observations of the dataset with 10 songs that have long time on chart and reached top 1, we have a hypothesis: For a song to reach top 1 and stay on the chart for a high number of weeks, it needs the following:
+
++ Genre: Pop, Rock or Dance
+
++ Duration: around 4.15 minutes 
+
++ Danceability: high danceability, around 0.7119 
+
++ Energy: high energy, around 0.6068 
+
++ Keys: 0
+
++ Loudness: low loudness, around -5.6001
+
++ Mode: 1 (major)
+
++ Speechiness: low, around 0.0545
+
++ Acousticness: low, around 0.266635 
+
++ Instrumentalness: low, around 0.00027165
+
++ Liveness: low, around 0.13775
+
++ Valence: around 0.5499 -> songs that sounds a bit negative
+
++ Tempo: around 116.9884 -> fast tempo 
+
+# Method
+
+We are planning to try to use different regression models and nearest neighbor to analyze those questions.
+
+For the regression model, we will use it to predict peak_position and weeks_on_chart using numerical variables (spotify_track_duration_ms, danceability, key, loudness, energy, speechiness, mode, acousticness, instrumentalness,liveness, valence, tempo). 
+For the nearest neighbor, we will try to classify the song genre by their audio features. 
+
+
+## Building model
+
+First, we split data into train and test using createDataPartition from "caret" library. We choose to put 90% of the data into training data and the remaining 10% into test data. We only select peak_position, spotify_track_duration_ms, danceability, key, loudness, energy, speechiness, mode, acousticness, instrumentalness,liveness, valence, tempo, weeks_on_chart columns because they include the information needed.
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(caret)
+
+index <- createDataPartition(unique_all$peak_position, p = .90, list = FALSE)
+train <- chart_audio[index, ]
+test <- chart_audio[-index, ]
+
+train <- select(train, peak_position, spotify_track_duration_ms, danceability, key, loudness, energy,
+                speechiness, mode, acousticness, instrumentalness, liveness, valence, tempo,
+                weeks_on_chart)
+
+```
+
+### Linear regression
+
+Then we start building linear regression model, starting with model predicting weeks_on_chart:
+```{r, echo = FALSE, comment = NA}
+train_woc = train %>% select(-peak_position)
+fit_woc <- lm(weeks_on_chart ~ loudness + spotify_track_duration_ms + liveness + tempo, 
+              data =train_woc)
+
+test <- test %>% filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key),
+                             !is.na(loudness), !is.na(energy), !is.na(speechiness), !is.na(mode),
+                             !is.na(acousticness), !is.na(instrumentalness), !is.na(liveness),
+                             !is.na(valence), !is.na(tempo)) 
+
+pred_vals_woc <- predict(fit_woc, newdata = test)
+
+target_woc <- test$weeks_on_chart #observed val
+
+rmse_woc <- sqrt(mean((target_woc - pred_vals_woc)^2))
+rmse_woc
+```
+We found that this model predicting weeks_on_chart from loudness, spotify_track_duration_ms, liveness and tempo will result in the lowest RMSE of 9.117999. 
+
+
+Next is the model predicting peak_position:
+```{r, echo = FALSE, comment = NA}
+train_pp = train %>% select(-weeks_on_chart)
+
+fit_position <- lm(peak_position ~ spotify_track_duration_ms + instrumentalness + tempo + mode + key,
+                   
+                   data = train_pp)
+
+pred_vals_position <- predict(fit_position, newdata = test)
+
+target_position <- test$peak_position #observed val
+
+rmse_position <- sqrt(mean((target_position - pred_vals_position)^2))
+rmse_position
+```
+We found that this model predicting peak_position also from spotify_track_duration_ms, instrumentalness, tempo, mode and key will result in the lowest RMSE of 29.50429. 
+
+These two models have some similarities. They both use spotify_track_duration_ms and tempo to predict. 
+
+
+
+### Lasso regression
+
+We also try using Lasso regression to see if there is any improvement.
+
+First we try to predict peak_position:
+
+```{r, message=FALSE, warning=FALSE, echo =FALSE, comment = NA}
+train_lasso_pp = train_pp %>% 
+  filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key), !is.na(loudness),
+         !is.na(energy), !is.na(speechiness), !is.na(mode), !is.na(acousticness),
+         !is.na(instrumentalness), !is.na(liveness), !is.na(valence), !is.na(tempo)) 
+  
+
+fit_peak <- lm(peak_position ~ spotify_track_duration_ms + instrumentalness + tempo + mode + key, 
+               data = train_lasso_pp)
+
+X_peak <- model.matrix(fit_peak)
+y_peak <- train_lasso_pp$peak_position
+
+beta_ols_peak <- solve(crossprod(X_peak)) %*% crossprod(X_peak, y_peak)
+
+lambda_peak <- 1.0
+p_peak <- ncol(X_peak)
+beta_ridge_peak <- solve(crossprod(X_peak) + diag(lambda_peak, ncol = p_peak, nrow = p_peak)) %*%
+  crossprod(X_peak, y_peak)
+
+library(glmnet)
+X_peak <- X_peak[, -1]
+fit_lasso_peak <- glmnet(X_peak, y_peak)
+plot(fit_lasso_peak, xvar = "lambda")
+
+X_test_peak <- model.matrix(~ spotify_track_duration_ms + instrumentalness + tempo + mode + key, data = test)
+X_test_peak <- as.matrix(X_test_peak)
+
+y_test_peak <- test$peak_position
+y_pred_peak <- X_test_peak %*% beta_ridge_peak
+
+X_test_peak <- X_test_peak[, -1]
+pred_lasso_peak <- predict(fit_lasso_peak, newx = X_test_peak, s = 1.0)
+rmse_lasso_peak <- sqrt(mean((y_test_peak - pred_lasso_peak)^2))
+rmse_lasso_peak
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE, comment = NA}
+train_lasso_woc <- train_woc %>% 
+  filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key), !is.na(loudness),
+         !is.na(energy), !is.na(speechiness), !is.na(mode), !is.na(acousticness),
+         !is.na(instrumentalness), !is.na(liveness), !is.na(valence), !is.na(tempo))
+
+fit_lasso_woc <- lm(weeks_on_chart ~ loudness + spotify_track_duration_ms + liveness + tempo,
+                    data = train_lasso_woc)
+
+X_woc <- model.matrix(fit_lasso_woc)
+y_woc <- train_lasso_woc$weeks_on_chart
+
+beta_ols_woc <- solve(crossprod(X_woc)) %*% crossprod(X_woc, y_woc)
+
+lambda_woc <- 1.0
+p_woc <- ncol(X_woc)
+beta_ridge_woc <- solve(crossprod(X_woc) + diag(lambda_woc, ncol = p_woc, nrow = p_woc)) %*%
+  crossprod(X_woc, y_woc)
+
+X_woc <- X_woc[, -1]
+fit_lasso_woc <- glmnet(X_woc, y_woc)
+plot(fit_lasso_woc, xvar = "lambda")
+
+X_test_woc <- model.matrix(~ loudness + spotify_track_duration_ms + liveness + tempo, data = test)
+X_test_woc <- as.matrix(X_test_woc)
+y_test_woc <- test$weeks_on_chart
+y_pred_woc <- X_test_woc %*% beta_ridge_woc
+
+X_test_woc <- X_test_woc[, -1]
+pred_lasso_woc <- predict(fit_lasso_woc, newx = X_test_woc, s = 1.0) # s = lambda
+rmse_lasso_woc <- sqrt(mean((y_test_woc - pred_lasso_woc)^2))
+rmse_lasso_woc
+```
+
+The RMSE's of the 2 regression model using Lasso regression do not improve with 9.15705 and 29.53312  for weeks_on_chart and peak_position models respectively.
+
+### Nearest neighbor
+
+We try to classify the songs after 2010's genre using nearest neighbor method with k neighbors = 9.
+
+```{r, echo = FALSE}
+songs_after_2010 %>% filter(!is.na(spotify_genre)) %>% filter(spotify_genre != "[]") -> songs_after_2010_only_audio_features_genre
+songs_after_2010_only_audio_features_genre[, names(songs_after_2010_only_audio_features_genre) %in% 
+                                                         c("spotify_genre","key","loudness","mode",
+                                                           "speechiness","acousticness",
+                                                           "instrumentalness","liveness","valence",
+                                                           "time_signature",
+                                                           "spotify_track_popularity",
+                                                           "danceability","energy","tempo")] %>% 
+  write.csv("songs_after_2010_only_audio_features_genre.csv")
+```
+
+Execute the python code (Nearest_Neighbor_Analysis.ipynb) with 
+input: songs_after_2010_only_audio_features_genre.csv from the code above
+
+Output:
+
+- predict genre: array(["['melodic rap', 'rap', 'trap']",
+       "['dance pop', 'edm', 'electro house', 'house', 'pop', 'progressive house',
+       'tropical house', 'uk dance']","['electropop', 'pop', 'tropical house']",
+       ...,
+       "['dance pop', 'hip hop', 'miami hip hop', 'pop', 'pop rap', 'rap', 
+       'southern hip hop', 'trap']","['dance pop', 'pop', 'post-teen pop']",
+       "['complextro', 'dance pop', 'edm', 'electro house', 'german techno', 
+       'pop', 'post-teen pop', 'tropical house']"],
+      dtype=object)
+       
+- accuracy = 0.9126416739319965
+
+Using 14 numeric variables about song's audio features: "spotify_track_duration_ms",key","loudness","mode","speechiness",
+
+"acousticness","instrumentalness","liveness","valence","time_signature",
+
+"spotify_track_popularity", "danceability","energy","tempo", we are able to classify a song's genre up to 91.26% accuracy with k-neighbor = 9.
+
+#Discussion
+Comparing RMSE's of the models and since the smaller the RMSE means the better the model, we found that the model with the lowest RMSE is the linear regression model. 
+
+First, we take a look at the coefficients of the linear regression model for weeks_on_chart.
+```{r, echo = FALSE}
+kable(fit_woc$coefficients)
+```
+This model has the lowest RMSE when using the following 4 variables: loudness, spotify_track_duration_ms, liveness and tempo.
+
+According to this model, to stay on the chart for a long time, song needs to have the following characteristics:
+- loudness around 0.05 dB
+
+- duration of the song around 0.0000032 ms
+
+- liveness of 0.8261512 suggests a studio recorded track (not live)
+
+
+Then we take a look at the coefficients of the model for peak_position.
+```{r, echo = FALSE}
+kable(fit_position$coefficients)
+```
+
+This model has the lowest RMSE when using the following 5 variables:  spotify_track_duration_ms, instrumentalness, tempo, mode and key
+
+According to this model, to stay on the chart for a long time, song needs to have the following characteristics:
+- tempo around 0.0067127 
+
+- key of the song is 0 (C)
+
+# Result
+
+We will fit the values in the hypothesis into linear regression models to see if the predicted peak_position and weeks_on_chart.
+
+```{r}
+hypothesis_woc <- c(-5.6001, 249186.2, 0.13775, 116.9884)
+x1 <- c(1, hypothesis_woc)
+hypothesis_pp <- c(249186.2, 0.00027165, 116.9884, 1, 0)
+x2 <- c(1, hypothesis_pp)
+
+sum(x1*fit_woc$coefficients)
+sum(x2*fit_position$coefficients)
+```
+We see that the predicted peak_position and weeks_on_chart are not what we desired (large weeks_on_chart and low peak_position).
+
+# Conclusion
+From the results above, we think that our hypothesis needs to consider more data than just looking at top 10 songs with high peak_position and large number of weeks_on_chart.
+If we classify the songs genre by their audio features, using nearest neighbor approach we have a pretty good accuracy
+around 90%.
+
+# Appendix
+
+Code that are not shown in the report:
+
+```{r, message=FALSE, warning=FALSE}
+billboard <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-09-14/billboard.csv')
+
+audio <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-09-14/audio_features.csv')
+
+summary(billboard)
+summary(audio)
+
+library(tidyverse)
+
+chart_audio = left_join(billboard, audio, by = c("song_id", "performer", "song"))
+
+rank_num_week = chart_audio[order(chart_audio$weeks_on_chart, decreasing = TRUE),] %>% 
+  distinct(song, .keep_all = TRUE) %>% 
+  select(song, week_id) %>% 
+  head(10)
+library(knitr)
+kable(rank_num_week)
+
+library(lubridate)
+
+chart_audio$week_id = mdy(chart_audio$week_id)
+
+songs_after_2010 = chart_audio %>% filter(week_id %in% c(ymd("2010-01-01"):today()))
+
+descending_woc = songs_after_2010[order(
+songs_after_2010$weeks_on_chart, decreasing = TRUE),]
+
+top1_after_2010 = descending_woc %>% filter(peak_position == 1)
+
+unique_all = descending_woc%>% distinct(song, .keep_all = TRUE)
+
+unique_top1 = top1_after_2010 %>% distinct(song, .keep_all = TRUE)
+```
+
+## Code for visualization and table
+### tempo
+```{r}
+library(ggplot2)
+
+count_tempo = unique_top1 %>% 
+  filter(!is.na(tempo))
+
+summary(count_tempo$tempo)
+
+count_tempo %>% 
+  ggplot(aes(x = tempo)) + 
+  geom_density()+
+  xlim(50,250)
+```
+
+### genre
+```{r}
+count_genre = unique_top1 %>% filter(!is.na(spotify_genre)) %>%
+  count(spotify_genre) %>% 
+  arrange(desc(n))
+
+kable(count_genre %>% top_n(5))
+```
+
+### energy
+```{r}
+count_energy = unique_top1 %>% 
+  filter(!is.na(energy))
+
+summary(count_energy$energy)
+
+count_energy %>% 
+  ggplot(aes(x = energy)) + 
+  geom_density()
+```
+
+### duration of the song
+```{r}
+count_duration = unique_top1 %>%
+  filter(!is.na(spotify_track_duration_ms)) 
+
+summary(count_duration$spotify_track_duration_ms)
+
+count_duration %>% 
+  ggplot(aes(x = spotify_track_duration_ms)) + 
+  geom_density()
+```
+
+### danceability
+```{r}
+count_danceability = unique_top1 %>% 
+  filter(!is.na(danceability)) 
+
+summary(count_danceability$danceability)
+
+count_danceability %>% 
+  ggplot(aes(x = danceability)) + 
+  geom_density()
+```
+
+### key
+```{r}
+count_key = unique_top1 %>% 
+  filter(!is.na(key)) %>% 
+  count(key)%>% 
+  rename(count = n) %>% 
+  arrange(desc(count))
+
+kable(count_key)
+
+count_key$key = as.character(count_key$key)
+
+mycols = c("#42daf5", "#f54242", "#6342f5", "#f5b942", "#f242f5", "#daf542", "#691f91", "#1f914d", "#b99cba", "#55fa34", "#9c605c", "#42f59c")
+count_key %>% 
+  ggplot(aes(x = 2, y = count, fill = key)) +
+  geom_bar(stat="identity", color = "white") +
+  geom_label(aes(label = count),
+             color = "white",
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y", start = 0)+
+  scale_fill_manual(values = mycols) +
+  theme_void() +
+  xlim(0.5, 2.5)
+```
+
+### loudness
+```{r}
+count_loudness = unique_top1 %>% 
+  filter(!is.na(loudness)) 
+
+summary(count_loudness$loudness)
+
+count_loudness %>% 
+  ggplot(aes(x = loudness)) + 
+  geom_density()
+
+count_speechiness %>% 
+  ggplot(aes(x = speechiness)) + 
+  geom_density()
+```
+
+### speechiness
+```{r}
+count_speechiness = unique_top1 %>% 
+  filter(!is.na(speechiness)) %>%  
+  count(speechiness)
+summary(count_speechiness$speechiness)
+```
+
+### mode
+```{r}
+count_mode = unique_top1 %>% 
+  filter(!is.na(mode)) %>% 
+  count(mode) %>% 
+  rename(freq = n) 
+count_mode$mode = as.character(count_mode$mode)
+
+count_mode %>% 
+  ggplot(aes(x = "", y = freq, fill = mode)) +
+  geom_bar(stat="identity", width=1) +
+  geom_label(aes(label = freq),
+             color = "white",
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")+
+  theme_void()
+```
+
+### acousticness
+```{r}
+count_acousticness = unique_top1 %>% 
+  filter(!is.na(acousticness)) 
+
+count_acousticness %>% 
+  ggplot(aes(x = acousticness)) + 
+  geom_density()
+```
+
+### instrumentalness
+```{r}
+count_instrumentalness = unique_top1 %>%
+  filter(!is.na(instrumentalness)) %>% 
+  count(instrumentalness) %>% 
+  arrange(desc(n))
+
+count_instrumentalness %>% 
+  ggplot(aes(x = instrumentalness)) + 
+  geom_density()
+```
+
+### liveness
+```{r}
+count_liveness = unique_top1 %>% 
+  filter(!is.na(liveness)) 
+
+count_liveness %>% 
+  ggplot(aes(x = liveness)) + 
+  geom_density()
+```
+
+### valence
+```{r}
+count_val = unique_top1 %>% 
+  filter(!is.na(valence)) 
+
+count_val %>% 
+  ggplot(aes(x = valence)) + 
+  geom_density()
+```
+
+### rank by number of weeks on chart
+```{r}
+rank_num_week = unique_top1[order(unique_top1$weeks_on_chart, decreasing = TRUE),]
+top10_woc = head(rank_num_week, 10)
+top10_woc$spotify_genre
+
+top10_woc$spotify_genre
+
+top10_woc$spotify_track_duration_ms
+
+top10_woc$danceability
+
+top10_woc$energy
+
+top10_woc$key
+
+top10_woc$loudness
+
+top10_woc$mode
+
+top10_woc$speechiness
+
+top10_woc$acousticness
+
+top10_woc$instrumentalness
+
+top10_woc$liveness
+
+top10_woc$valence
+
+top10_woc$tempo
+
+
+highest_num_week = unique_all[order(unique_all$weeks_on_chart, decreasing = TRUE),]
+head(highest_num_week$song, 10)
+
+highest_woc = head(highest_num_week,10) %>%  filter(peak_position != 1)
+
+highest_woc$spotify_genre
+
+highest_woc$spotify_track_duration_ms
+
+highest_woc$danceability
+
+highest_woc$energy
+
+highest_woc$key
+
+highest_woc$loudness
+
+highest_woc$mode
+
+highest_woc$speechiness
+
+highest_woc$acousticness
+
+highest_woc$instrumentalness
+
+highest_woc$liveness
+
+highest_woc$valence
+
+highest_woc$tempo
+```
+
+## Code for Building models
+```{r,  message=FALSE, warning=FALSE}
+library(caret)
+
+index <- createDataPartition(unique_all$peak_position, p = .90, list = FALSE)
+train <- chart_audio[index, ]
+test <- chart_audio[-index, ]
+
+train <- select(train, peak_position, spotify_track_duration_ms, danceability, key, loudness, energy,
+                speechiness, mode, acousticness, instrumentalness, liveness, valence, tempo,
+                weeks_on_chart)
+```
+
+### linear regression
+- Predicting weeks_on_chart
+
+```{r, echo = TRUE}
+train_woc = train %>% select(-peak_position)
+fit_woc <- lm(weeks_on_chart ~ loudness + spotify_track_duration_ms + liveness + tempo, 
+              data =train_woc)
+kable(fit_woc$coefficients)
+
+test <- test %>% filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key),
+                             !is.na(loudness), !is.na(energy), !is.na(speechiness), !is.na(mode),
+                             !is.na(acousticness), !is.na(instrumentalness), !is.na(liveness),
+                             !is.na(valence), !is.na(tempo)) 
+
+pred_vals_woc <- predict(fit_woc, newdata = test)
+
+target_woc <- test$weeks_on_chart #observed val
+
+rmse_woc <- sqrt(mean((target_woc - pred_vals_woc)^2))
+rmse_woc
+```
+
+- Predicting peak_position
+```{r, echo = TRUE}
+train_pp = train %>% select(-weeks_on_chart)
+
+fit_position <- lm(peak_position ~ spotify_track_duration_ms + instrumentalness + tempo + mode + key,
+                   
+                   data = train_pp)
+kable(fit_position$coefficients)
+
+pred_vals_position <- predict(fit_position, newdata = test)
+
+target_position <- test$peak_position #observed val
+
+rmse_position <- sqrt(mean((target_position - pred_vals_position)^2))
+rmse_position
+```
+
+### lasso regression
+- Predicting peak_position
+
+```{r, message=FALSE, warning=FALSE, echo =TRUE}
+train_lasso_pp = train_pp %>% 
+  filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key), !is.na(loudness),
+         !is.na(energy), !is.na(speechiness), !is.na(mode), !is.na(acousticness),
+         !is.na(instrumentalness), !is.na(liveness), !is.na(valence), !is.na(tempo)) 
+  
+
+fit_peak <- lm(peak_position ~ spotify_track_duration_ms + instrumentalness + tempo + mode + key, 
+               data = train_lasso_pp)
+kable(fit_peak$coefficients)
+
+X_peak <- model.matrix(fit_peak)
+y_peak <- train_lasso_pp$peak_position
+
+beta_ols_peak <- solve(crossprod(X_peak)) %*% crossprod(X_peak, y_peak)
+
+lambda_peak <- 1.0
+p_peak <- ncol(X_peak)
+beta_ridge_peak <- solve(crossprod(X_peak) + diag(lambda_peak, ncol = p_peak, nrow = p_peak)) %*%
+  crossprod(X_peak, y_peak)
+
+library(glmnet)
+X_peak <- X_peak[, -1]
+fit_lasso_peak <- glmnet(X_peak, y_peak)
+plot(fit_lasso_peak, xvar = "lambda")
+
+X_test_peak <- model.matrix(~ spotify_track_duration_ms + instrumentalness + tempo + mode + key, data = test)
+X_test_peak <- as.matrix(X_test_peak)
+
+y_test_peak <- test$peak_position
+y_pred_peak <- X_test_peak %*% beta_ridge_peak
+
+X_test_peak <- X_test_peak[, -1]
+pred_lasso_peak <- predict(fit_lasso_peak, newx = X_test_peak, s = 1.0)
+rmse_lasso_peak <- sqrt(mean((y_test_peak - pred_lasso_peak)^2))
+rmse_lasso_peak
+```
+
+- Predicting weeks_on_chart 
+
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+train_lasso_woc <- train_woc %>% 
+  filter(!is.na(spotify_track_duration_ms), !is.na(danceability), !is.na(key), !is.na(loudness),
+         !is.na(energy), !is.na(speechiness), !is.na(mode), !is.na(acousticness),
+         !is.na(instrumentalness), !is.na(liveness), !is.na(valence), !is.na(tempo))
+
+fit_lasso_woc <- lm(weeks_on_chart ~ loudness + spotify_track_duration_ms + liveness + tempo,
+                    data = train_lasso_woc)
+kable(fit_lasso_woc$coefficients)
+
+X_woc <- model.matrix(fit_lasso_woc)
+y_woc <- train_lasso_woc$weeks_on_chart
+
+beta_ols_woc <- solve(crossprod(X_woc)) %*% crossprod(X_woc, y_woc)
+
+lambda_woc <- 1.0
+p_woc <- ncol(X_woc)
+beta_ridge_woc <- solve(crossprod(X_woc) + diag(lambda_woc, ncol = p_woc, nrow = p_woc)) %*%
+  crossprod(X_woc, y_woc)
+
+X_woc <- X_woc[, -1]
+fit_lasso_woc <- glmnet(X_woc, y_woc)
+plot(fit_lasso_woc, xvar = "lambda")
+
+X_test_woc <- model.matrix(~ loudness + spotify_track_duration_ms + liveness + tempo, data = test)
+X_test_woc <- as.matrix(X_test_woc)
+y_test_woc <- test$weeks_on_chart
+y_pred_woc <- X_test_woc %*% beta_ridge_woc
+
+X_test_woc <- X_test_woc[, -1]
+pred_lasso_woc <- predict(fit_lasso_woc, newx = X_test_woc, s = 1.0) # s = lambda
+rmse_lasso_woc <- sqrt(mean((y_test_woc - pred_lasso_woc)^2))
+rmse_lasso_woc
+```
+
+## Code for nearest neighbor 
+### Create a csv file for songs_after_2010_only_audio_features_genre
+```{r}
+songs_after_2010 %>% filter(!is.na(spotify_genre)) %>% filter(spotify_genre != "[]") -> songs_after_2010_only_audio_features_genre
+songs_after_2010_only_audio_features_genre[, names(songs_after_2010_only_audio_features_genre) %in% 
+                                                         c("spotify_genre","key","loudness","mode",
+                                                           "speechiness","acousticness",
+                                                           "instrumentalness","liveness","valence",
+                                                           "time_signature",
+                                                           "spotify_track_popularity",
+                                                           "danceability","energy","tempo")] %>% 
+  write.csv("songs_after_2010_only_audio_features_genre.csv")
+```
+### Python
+
+import pandas as pd
+
+from sklearn.model_selection import train_test_split
+
+from sklearn.neighbors import KNeighborsClassifier
+
+import numpy as np
+
+df = pd.read_csv('songs_after_2010_only_audio_features_genre.csv')
+
+df = df.iloc[: , 1:]
+
+df = df.fillna(0)
+
+def nearest_neighbor(data):
+    X = data.drop('spotify_genre', axis = 1)
+    y = data.spotify_genre
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.1)
+    (X_train.shape, X_test.shape)
+
+    model = KNeighborsClassifier(n_neighbors = 9)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    accuracy = np.mean(np.equal(y_test, y_pred))
+    return accuracy, y_pred
+    
+print(nearest_neighbor(df))
+
